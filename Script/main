@@ -19,12 +19,13 @@ import csv
 import smbclient
 import socket
 from smb.SMBConnection import SMBConnection
+import requests
+import selenium
 
 #example for inbound event (T0 at IDF and T1 CWP event ringing)
 
-
+is_DHCP = False
 Scope_IP_Address = "10.0.0.155"
-
 NTP_Server_IP_Address = "10.0.0.168"
 Subnet_Mask = "255.255.255.0"
 Gateway = "10.0.0.1"
@@ -49,28 +50,34 @@ def connection_to_scope():
         print(f"An error occurred: {e}")
 
     try:
+        print(scope.query(':ACQuire:AMODe?'))
+        scope.write(':ACQuire:AMODe FAST')
+        print(scope.query(':ACQuire:AMODe?'))
+    except Exception as e:
+        print((f"An error occurred: {e}"))
+
+
+    try:
         print("Configuring NTP........")
-        scope.write(f':SYSTem:NETwork:IPADdress "{Scope_IP_Address}"')
-        scope.write(f':SYSTem:NETwork:SMASk "{Subnet_Mask}"')
-        scope.write(f':SYSTem:NETwork:GWAY "{Gateway}"')
-        print(f"Verified Scope Date: {scope.query(':SYSTem:DATE?').strip()}")
+        print(scope.query(':SYSTem:COMMunicate:LAN:TYPE?'))
+        scope.write(f':SYSTem:NETwork:IPADdress {Scope_IP_Address}')
+        scope.write(f':SYSTem:NETwork:SMASk {Subnet_Mask}')
+        scope.write(f':SYSTem:NETwork:GWAY {Gateway}')
+        print(scope.query(':SYSTem:DATE?'))
+        print(scope.query(':SYSTem:TIME?'))
     except Exception as e:
         print(f"An error occurred: {e}")
 
     try:
         print("Configuring and forcing NTP synchronization...")
-    
-
         
         scope.write(f':SYSTem:NTP:SERVer "{NTP_Server_IP_Address}"')
     
         scope.write(':SYSTem:NTP:UPDate')
-    
 
         scope.write(':SYSTem:NTP:PONSync ON')
         scope.write(':SYSTem:NTP:PERiodic ON')
         scope.write(':SYSTem:NTP:INTeval 60')
-
     
         print(f"Verified Scope Date: {scope.query(':SYSTem:DATE?').strip()}")
         print(f"Verified Scope Time: {scope.query(':SYSTem:TIME?').strip()}")
@@ -78,11 +85,53 @@ def connection_to_scope():
     except Exception as e:
         print(f"An error occurred during NTP configuration: {e}")
 
+    try:
+        print("Configuring NTP........")
+        print(scope.query(':SYSTem:COMMunicate:LAN:TYPE?'))
+        scope.write(':SYSTem:COMMunicate:LAN:TYPE DHCP')
+
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+
+    try:
+        print(scope.query('TRIG:MODE?'))
+        scope.write(':TRIGger:MODE SINGle')
+    except Exception as e:
+        print(f"")
+
     
 
 
     scope.close()
     rm.close()
+
+
+
+
+
+
+
+def scope_web():
+    url = 'http://10.0.0.155'
+    payload = {'button_id': 'submit_value'}
+
+    session = requests.Session()
+    response = session.post(url, data=payload)
+
+    print(response.text)
+
+
+
+
+
+
+
+
+
+
+
 
 def download_smb_file():
     username = "ShareUser"
@@ -123,5 +172,6 @@ download_smb_file()
 
 
 connection_to_scope()
+scope_web()
 #download_smb_file()
 
