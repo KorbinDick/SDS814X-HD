@@ -1,0 +1,52 @@
+*unfinished* *dated* *in the process of preparing for VCS accreditation*
+The goal of this page is to show a meaning full process of comparing an analog event captured at an oscilloscope port and a network captured event.
+
+An example would be an event at the IDF blocks (which interface with the FAA) as the analog captured event and a CWP DA key ringing as the network captured event, both with a NTP timestamps.
+
+			
+Events/Tests this will help out with:
+GL Measurement Points
+TC-60_Addendum-A_TimingMeasurements
+	-Specifically:
+		-Table 2 Event 1 -> Dialed digits action (T0) to CWP ringing button (REST API "RINGING" HTTP response) (T1)
+		-Table 4 Event 1 -> FXS Ring action (T0) to CWP ringing button (REST API "RINGING" HTTP response) (T1)
+		
+
+Some How-To guides online:
+
+SDS814X HD:
+Main Siglent Downloads
+SDS800X-HD Datasheet
+SDS800X-HD Programming Guide
+SDS800X-HD User Manual
+Using SDS800X-HD History/Sequence
+Requests
+Selenium
+
+SDS1104X-E:
+NTP Synchronization SDS
+SDS1104X-E Manual
+Data Logger
+Binary_File_Format_Reference_For_.slg_Files
+
+
+
+-Equipment needed:
+	-Oscilloscope with NTP (SDS814X-E or SDS1104X-E)
+	-Master clock source with NTP (Meinberg)
+		 -Meinberg IPs
+		-SFAT: 100.64.20.6
+		-MFAT: 100.64.8.5
+	-SUT (SFAT/MFAT) ethernet port/open interface port
+	-Packet capture method (Wireshark)
+	-Analog signal to measure (Datascout or signal from FATA/IDF)
+	
+What I need currently to measure analog-packet delay:
+	-Connection to SUT (switch port interface open), preferably within the same Stratum as the network device that is being measured
+	
+Procedure:
+
+Script Flow:
+-Set user variables (scope ip, NTP server ip, submask, gateway)
+-Set connection using pyvisa
+-Configure NTP 
