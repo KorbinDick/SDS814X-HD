@@ -1,5 +1,5 @@
 ##################################################################################################################################################################################
-#This script is only for single channel measurments, completely dependent on the file format and the Siglent SDS1104X-E being used as the scope
+#This script is only for single channel measurments, completely dependent on the file format and the Siglent SDS814X_HD being used as the scope
 #
 #
 #
@@ -51,20 +51,33 @@ output_path = r"C:\Users\KDick\Desktop" + output_filename
 #example for inbound event (T0 at IDF and T1 CWP event ringing)
 
 
-smbclient.register_session(
-    server="10.0.0.155", username="ShareUser", password=""
-)
+smbclient.register_session(server="10.0.0.155", username="ShareUser", password="")
 file_path = r"\\10.0.0.155\share\SIGLENT\SDS814X_HD_Binary_C1_1.bin"
 print(smbclient.path.exists(file_path))
 print(smbclient.listdir(r"\\10.0.0.155\share\SIGLENT"))
 
 
+def connection_to_scope():
+    rm = pyvisa.ResourceManager()
+    print(rm.list_resources())
+    scope = rm.open_resource(f'TCPIP0::{Scope_IP_Address}::INSTR')
+    print(scope.query('*IDN?'))
 
+    try:
+        date_str = scope.query(':SYSTem:DATE?').strip()
+        time_str = scope.query(':SYSTem:TIME?').strip()
+    
+        print(f"Scope Raw Date: {date_str}")
+        print(f"Scope Raw Time: {time_str}")
+    
+        formatted_time = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]} {time_str[:2]}:{time_str[2:4]}:{time_str[4:]}"
+        print(f"Formatted Timestamp: {formatted_time}")
 
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
-
-
-
+    scope.close()
+    rm.close()
 
 def download_smb_file():
     username = "ShareUser"
@@ -89,7 +102,6 @@ def download_smb_file():
         print("Connected successfully. Downloading file...")
 
         with open(local_file_path, "wb") as local_file:
-            # retrieveFile writes the remote data directly into your local file object
             conn.retrieveFile(share_name, remote_file_path, local_file)
             
         print(f"File downloaded successfully to {local_file_path}")
@@ -98,7 +110,6 @@ def download_smb_file():
         print(f"An error occurred: {e}")
         
     finally:
-        # 4. Always close the connection
         conn.close()
 
 download_smb_file()
@@ -107,23 +118,7 @@ download_smb_file()
     
 
 
-def connection_to_scope():
-    rm = pyvisa.ResourceManager()
-    print(rm.list_resources())
-    scope = rm.open_resource(f'TCPIP0::{Scope_IP_Address}::INSTR')
-    print(scope.query('*IDN?'))
 
-    scope.write('STOP')
-
-
-    print(scope.query('MMEMory:CATalog?'))
-
-
-
-    
-
-    scope.close()
-    rm.close()
 
 
 def reading_slg_file(file_path):
@@ -292,7 +287,8 @@ def create_csv_file(voltage_sample_buffer, NTP_time_buffer, output_filename):
 ###############################################################
 
 
-#connection_to_scope()
+connection_to_scope()
+download_smb_file()
 
 
 reading_slg_file(input_path)
