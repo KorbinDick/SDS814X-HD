@@ -6,23 +6,7 @@
 #
 #
 #
-#
-#
-# < -> little endian byte order
-# 8s -> 8-byte character array/string
-# I -> 4-byte unsigned int
-# 32s -> 32-byte character
-# d -> 8-byte double
-# Q -> 8-byte unsigned int
-#
-#SPLG 0005 example
-#first sector 16781312
-#second sector 16783872
-#third sector 16786432
-#fourth sector 16788992
-#last sector 16791552
-#
-#
+
 ###################################################################################################################################################################################
 import csv
 import struct
@@ -33,48 +17,69 @@ import matplotlib.dates as mdates
 import pyvisa
 import csv
 import smbclient
-
 import socket
 from smb.SMBConnection import SMBConnection
-
-Scope_IP_Address = "10.0.0.155"
-NTP_Server_IP_Address = "100.64.8.3"
-
-input_filename = "usr_wf_data"
-output_filename = "Capture Test.csv"
-plot_name = output_filename.removesuffix('.csv')
-
-
-input_path = r"C:\Users\Korbi\OneDrive\Desktop\netStorage\SDS814X_HD_Binary_C1_1.bin"
-output_path = r"C:\Users\KDick\Desktop" + output_filename
 
 #example for inbound event (T0 at IDF and T1 CWP event ringing)
 
 
-smbclient.register_session(server="10.0.0.155", username="ShareUser", password="")
-file_path = r"\\10.0.0.155\share\SIGLENT\SDS814X_HD_Binary_C1_1.bin"
-print(smbclient.path.exists(file_path))
-print(smbclient.listdir(r"\\10.0.0.155\share\SIGLENT"))
+Scope_IP_Address = "10.0.0.155"
+
+NTP_Server_IP_Address = "10.0.0.168"
+Subnet_Mask = "255.255.255.0"
+Gateway = "10.0.0.1"
+
+
+
+# smbclient.register_session(server=Scope_IP_Address, username="ShareUser", password="")
+# file_path = rf"{Scope_IP_Address}\share\SIGLENT\SDS814X_HD_Binary_C1_1.bin"
+# print(smbclient.path.exists(file_path))
+# print(smbclient.listdir(rf"{Scope_IP_Address}\share\SIGLENT"))
 
 
 def connection_to_scope():
     rm = pyvisa.ResourceManager()
     print(rm.list_resources())
     scope = rm.open_resource(f'TCPIP0::{Scope_IP_Address}::INSTR')
-    print(scope.query('*IDN?'))
+    
 
     try:
-        date_str = scope.query(':SYSTem:DATE?').strip()
-        time_str = scope.query(':SYSTem:TIME?').strip()
-    
-        print(f"Scope Raw Date: {date_str}")
-        print(f"Scope Raw Time: {time_str}")
-    
-        formatted_time = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]} {time_str[:2]}:{time_str[2:4]}:{time_str[4:]}"
-        print(f"Formatted Timestamp: {formatted_time}")
-
+        print(scope.query('*IDN?'))
     except Exception as e:
         print(f"An error occurred: {e}")
+
+    try:
+        print("Configuring NTP........")
+        scope.write(f':SYSTem:NETwork:IPADdress "{Scope_IP_Address}"')
+        scope.write(f':SYSTem:NETwork:SMASk "{Subnet_Mask}"')
+        scope.write(f':SYSTem:NETwork:GWAY "{Gateway}"')
+        print(f"Verified Scope Date: {scope.query(':SYSTem:DATE?').strip()}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+    try:
+        print("Configuring and forcing NTP synchronization...")
+    
+
+        
+        scope.write(f':SYSTem:NTP:SERVer "{NTP_Server_IP_Address}"')
+    
+        scope.write(':SYSTem:NTP:UPDate')
+    
+
+        scope.write(':SYSTem:NTP:PONSync ON')
+        scope.write(':SYSTem:NTP:PERiodic ON')
+        scope.write(':SYSTem:NTP:INTeval 60')
+
+    
+        print(f"Verified Scope Date: {scope.query(':SYSTem:DATE?').strip()}")
+        print(f"Verified Scope Time: {scope.query(':SYSTem:TIME?').strip()}")
+
+    except Exception as e:
+        print(f"An error occurred during NTP configuration: {e}")
+
+    
+
 
     scope.close()
     rm.close()
@@ -87,7 +92,7 @@ def download_smb_file():
     server_ip = "10.0.0.155"
     print(client_name)
     share_name = "share"
-    remote_file_path = "SIGLENT\SDS814X_HD_Binary_C1_1.bin"  # Path to the file inside the share
+    remote_file_path = "SIGLENT\SDS814X_HD_Binary_C1_1.bin"
     local_file_path = r"C:\Users\Korbi\OneDrive\Desktop\netStorage\temp.bin"
 
 
@@ -114,186 +119,9 @@ def download_smb_file():
 
 download_smb_file()
 
-
-    
-
-
-
-
-
-def reading_slg_file(file_path):
-    global zero_adc_code, value_per_adc_code, vpos_val, sector_number_per_channel, sample_rate, NTP_time
-    FORMAT_STRING = '<8s I 32s 32s 32s 20s I I d d d Q Q Q Q Q I I I I I I I I 152s 256s I I d d d d I I 8s 200s I I d d d d I I 8s 200s'
-    with open(file_path, 'rb') as f:
-        data = f.read(struct.calcsize(FORMAT_STRING))
-    unpacked = struct.unpack(FORMAT_STRING, data)
-
-    sector_number_per_channel = unpacked[7]
-    sample_rate = unpacked[9]
-    NTP_time = datetime(unpacked[17], unpacked[18], unpacked[19], unpacked[20], unpacked[21], unpacked[22], unpacked[23] * 1000)
-    vpos_val = unpacked[30]
-    value_per_adc_code = unpacked[31]
-    zero_adc_code = unpacked[32]
-
-        
-    parsed_data = {
-        #first section (product info)
-        "file_type": unpacked[0].decode('ascii').rstrip('\x00'),
-        "file_version": unpacked[1],
-        "model_number": unpacked[2].decode('ascii').rstrip('\x00'),
-        "serial_number": unpacked[3].decode('ascii').rstrip('\x00'),
-        "software_version": unpacked[4].decode('ascii').rstrip('\x00'),
-        "reserved_after_product_info": unpacked[5],
-        #second section (record info)
-        "channels_enabled": unpacked[6],
-        "sector_number_per_channel": unpacked[7],
-        "tdiv_value": unpacked[8],
-        "sample_rate (Sa/s)": unpacked[9],
-        "total_recorded_length (s)": unpacked[10],
-        "number_of_data_points_per_channel": unpacked[11],
-        "start_sector_offset": unpacked[12],
-        "end_sector_offset": unpacked[13],
-        "file_offset_of_first_data_point": unpacked[14],
-        "file_offset_of_last_data_point": unpacked[15],
-        "bits_number_of_data": unpacked[16],
-        "Year": unpacked [17],
-        "Month": unpacked [18],
-        "Day": unpacked [19],
-        "Hour": unpacked [20],
-        "Minute": unpacked [21],
-        "Second": unpacked [22],
-        "Millisecond": unpacked [23],
-        "reserved_after_record_info": unpacked [24],
-        #third section (channel info)
-        "large_reserved_block": unpacked [25],
-        "channel1_on_off_status": unpacked[26],
-        "probe_index": unpacked[27],
-        "custom_probe": unpacked[28],
-        "V/div": unpacked[29],
-        "vpos_val offset": unpacked[30],
-        "value_per_adc_code": unpacked[31],
-        "zero_adc_code": unpacked[32],
-        "type_of_unit": unpacked[33],
-        "unit_of_channel": unpacked[34].decode('ascii').rstrip('\x00'),
-        "reserved_after_channel1_info": unpacked[35],
-    }
-
-    print(parsed_data)
-
-
-
-def parse_data(file_path, sector_number_per_channel):
-    global byte_buffer
-    initial_data_sector_address = 16781312
-    initial_data_address = 16781372
-
-    byte_buffer = bytearray()
-    with open(file_path, "rb") as f:
-        for i in range(sector_number_per_channel):
-            f.seek(initial_data_address + (i * 2560))
-            chunk = f.read(2500)
-            byte_buffer.extend(chunk)
-        
-    try:
-        null_index = byte_buffer.index(0x00)
-        del byte_buffer[null_index:]
-    except ValueError:
-        pass
-    #print(byte_buffer)
-
-
-
-
-def convert_data_to_voltage(byte_buffer, zero_adc_code, value_per_adc_code, vpos_val):
-    #reference: voltage = (data − zero_adc_code) ∙ value_per_adc_code − vpos_val
-    global voltage_sample_buffer
-    voltage_sample_buffer = []
-    for i in range(len(byte_buffer)):
-        voltage = (byte_buffer[i] - zero_adc_code) * value_per_adc_code - vpos_val
-        voltage_sample_buffer.append(voltage)
-    print("poo")
-    #print(voltage_sample_buffer)
-
-
-def calculate_time_data(voltage_sample_buffer, sample_rate, NTP_time):
-    global formatted_time_buffer, NTP_time_buffer
-    #reference: time_value = data_index/sample_rate
-    #reference: where -> data_index = sector_index ∙ 2500 + data_index_in_sector
-    time_sample_buffer = []
-    NTP_time_buffer = []
-    
-    for i in range(len(voltage_sample_buffer)):
-        time = (i / sample_rate)
-        time_sample_buffer.append(time)
-        NTP_time_buffer.append(NTP_time + timedelta(seconds=time))
-    print("poo")
-    formatted_time_buffer = [dt.strftime("%Y-%m-%d %H:%M:%S.%f") for dt in NTP_time_buffer]
-    #print(formatted_time_buffer)
-
-
-
-
-
-
-def plot_waveform(voltage_buffer, NTP_buffer, plot_name):
-    
-    fig, ax = plt.subplots()
-    ax.plot(NTP_buffer, voltage_buffer, label="Waveform")
-    ax.set_xlabel('Time')
-    ax.set_ylabel('Voltage (v)')
-    ax.set_title(plot_name)
-
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S.%f'))
-    annot = ax.annotate("", xy=(0,0), xytext=(10, 10), textcoords="offset points", bbox=dict(boxstyle="round", fc="white", ec="gray", alpha=0.9))
-    annot.set_visible(False)
-
-    num_dates = mdates.date2num(NTP_buffer)
-
-    def hover(event):
-        if event.inaxes == ax:
-            idx = (np.abs(num_dates - event.xdata)).argmin()
-
-            exact_time = NTP_buffer[idx]
-            y_val = voltage_buffer[idx]
-
-            time_str = exact_time.strftime('%Y-%m-%d %H:%M:%S.%f')
-
-            annot.xy = (event.xdata, event.ydata)
-            annot.set_text(f"Time: {time_str}\nVolt: {y_val:.4f}V")
-            annot.set_visible(True)
-            fig.canvas.draw_idle()
-        else:
-            if annot.get_visible():
-                annot.set_visible(False)
-                fig.canvas.draw_idle()
-
-    fig.canvas.mpl_connect("motion_notify_event", hover)
-    plt.show()
-
-
-def create_csv_file(voltage_sample_buffer, NTP_time_buffer, output_filename):
-    with open(output_filename, 'w', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow(["Time", "Voltage"])
-        for time, voltage in zip(NTP_time_buffer, voltage_sample_buffer):
-            writer.writerow([time, voltage])
-
-
-
-
-
-
-
 ###############################################################
 
 
 connection_to_scope()
-download_smb_file()
+#download_smb_file()
 
-
-reading_slg_file(input_path)
-parse_data(input_path, sector_number_per_channel)
-convert_data_to_voltage(byte_buffer, zero_adc_code, value_per_adc_code, vpos_val)
-calculate_time_data(voltage_sample_buffer, sample_rate, NTP_time)
-create_csv_file(voltage_sample_buffer, NTP_time_buffer, output_path)
-plot_waveform(voltage_sample_buffer, NTP_time_buffer, plot_name)
